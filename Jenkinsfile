@@ -2,7 +2,7 @@ pipeline {
 	    agent any
 	
 
-	    // Declare Environment Variables
+	    // Environment Variables
 	    environment {
 	        	//Orchestrator Services
 				UIPATH_ORCH_URL = "https://cloud.uipath.com/"
@@ -31,11 +31,22 @@ pipeline {
 	        stage('Unit Tests') {
 	            steps {
 	            echo 'Testing the workflow...'
+				UiPathTest (
+					testTarget: [$class: 'TestProjectEntry', testProjectPath: "${WORKSPACE}", environments: ""],
+					orchestratorAddress: "${UIPATH_ORCH_URL}",
+					orchestratorTenant: "${UIPATH_ORCH_TENANT_NAME}",
+					folderName: "${UIPATH_ORCH_FOLDER_NAME}",
+					timeout: 10000,
+					traceLevel: 'None',
+					testResultsOutputPath: '',
+					credentials: ExternalApp(accountForApp: "${UIPATH_ORCH_LOGICAL_NAME}", applicationId: "${EXAPP_APPID}", applicationSecret: 'ExApp_aitraining_Mai_TestSuiteTraining', applicationScope: "${EXAPP_SCOPES}", identityUrl: "${EXAPP_IDENTITYURL}"),
+					parametersFilePath: ''
+				)
 	            }
 			}    
 		    
 			// UiPath Pack
-	        stage('Build Nuget Package') {
+	        stage('Build Process') {
 				when {
 					expression {
 						currentBuild.result == null || currentBuild.result == 'SUCCESS' 
@@ -43,11 +54,20 @@ pipeline {
 				}				
 				steps {
 					echo "Building package with ${WORKSPACE}"
+					UiPathPack (
+						outputPath: "Output\\${env.BUILD_NUMBER}",
+						projectJsonPath: "project.json",
+						outputType: "Process",
+						// runWorkflowAnalysis: true,
+						version: AutoVersion(),
+						useOrchestrator: false,
+						traceLevel: 'Information'
+					)
 				}
 	        }
 			
 	        // UiPath Deploy
-	        stage('Deploy To Orchestrator') {
+	        stage('Deploy Process') {
 				when {
 					expression {
 						currentBuild.result == null || currentBuild.result == 'SUCCESS' 
@@ -55,6 +75,17 @@ pipeline {
 				}
 				steps {
 	                echo 'Deploying process to orchestrator...'
+	                UiPathDeploy (
+	                		packagePath: "Output\\${env.BUILD_NUMBER}",
+	                		orchestratorAddress: "${UIPATH_ORCH_URL}",
+	                		orchestratorTenant: "${UIPATH_ORCH_TENANT_NAME}",
+	               			folderName: "${UIPATH_ORCH_FOLDER_NAME}",
+						environments: "env",
+						createProcess: true,
+						credentials: ExternalApp(accountForApp: "${UIPATH_ORCH_LOGICAL_NAME}", applicationId: "${EXAPP_APPID}", applicationSecret: 'ExApp_aitraining_Mai_TestSuiteTraining', applicationScope: "${EXAPP_SCOPES}", identityUrl: "${EXAPP_IDENTITYURL}"),
+						traceLevel: 'Information',
+						entryPointPaths: 'Main.xaml'
+					)
 				}
 			}
 	    }
